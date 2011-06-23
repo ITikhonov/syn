@@ -3,8 +3,8 @@
 #include <math.h>
 #include <stdint.h>
 
-#include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
+#include <GL/gl.h>
+#include <GL/glfw.h>
 
 #include <pulse/pulseaudio.h>
 
@@ -102,25 +102,25 @@ static void audio_underflow_cb(pa_stream *s, void *userdata) {
 }
 
 
+pa_mainloop *pa_ml;
 pa_stream *ps;
 
 void audio_init() {
-	pa_threaded_mainloop *pa_ml=pa_threaded_mainloop_new();
-	pa_mainloop_api *pa_mlapi=pa_threaded_mainloop_get_api(pa_ml);
+	pa_ml=pa_mainloop_new();
+	pa_mainloop_api *pa_mlapi=pa_mainloop_get_api(pa_ml);
 	pa_context *pa_ctx=pa_context_new(pa_mlapi, "te");
 	pa_context_connect(pa_ctx, NULL, 0, NULL);
 	int pa_ready = 0;
 	pa_context_set_state_callback(pa_ctx, pa_state_cb, &pa_ready);
 
-	pa_threaded_mainloop_start(pa_ml);
-	while(pa_ready==0) { ; }
+	while(pa_ready==0) { pa_mainloop_iterate(pa_ml,1,0); }
 
 	printf("audio ready\n");
 
 	if (pa_ready == 2) {
 		pa_context_disconnect(pa_ctx);
 		pa_context_unref(pa_ctx);
-		pa_threaded_mainloop_free(pa_ml);
+		pa_mainloop_free(pa_ml);
 	}
 
 	pa_sample_spec ss;
@@ -143,44 +143,71 @@ void audio_init() {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-// COMMANDS
+// Images
 //////////////////////////////////////////////////////////////////////////////////////////
+
+GLuint load(char *name,int w,int h) {
+	int size=w*h*4;
+	char buf[size];
+	FILE *f=fopen(name,"r");
+	fread(buf,size,1,f);
+	fclose(f);
+
+	GLuint id;
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_2D,id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+   	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,buf);
+	return id;
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // VISUAL
 //////////////////////////////////////////////////////////////////////////////////////////
 
-static gboolean on_expose_event(GtkWidget *widget, GdkEventExpose *event, gpointer data) {
-	cairo_t *cr = gdk_cairo_create (widget->window);
-	cairo_destroy(cr);
-	return FALSE;
+GLuint osc_square_icon=-1;
+
+void draw_icon(GLuint i,int x,int y, float a) {
+	glLoadIdentity();
+	glTranslatef(x,y,-2);
+	glRotatef(a,0,0,1);
+	glBindTexture(GL_TEXTURE_2D,osc_square_icon);
+	glBegin(GL_QUADS);
+	glTexCoord2f(0,0); glVertex2i(-16,-16);
+	glTexCoord2f(0,1); glVertex2i(-16,16);
+	glTexCoord2f(1,1); glVertex2i(16,16);
+	glTexCoord2f(1,0); glVertex2i(16,-16);
+	glEnd();
 }
 
-GtkWidget *window;
+void draw() {
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-gboolean update_view(gpointer _) {
-	gdk_window_invalidate_rect(gtk_widget_get_window(window),0,1);
+	static float a=0;
+	draw_icon(osc_square_icon,100,100,0);
+	draw_icon(osc_square_icon,200,200,a+=10);
 
-	return FALSE;
+	glfwSwapBuffers();
 }
 
-static gboolean on_keypress(GtkWidget *widget, GdkEventKey *event, gpointer data) {
-	offset=0; pa_stream_cork(ps,0,0,0);
+int doexit=0;
 
-	switch(event->keyval) {
-        case GDK_KEY_Escape: gtk_main_quit(); break;
+void GLFWCALL key(int k,int a) {
+	if(a==GLFW_PRESS) {
+		switch(k) {
+		case GLFW_KEY_ESC: doexit=1; break;
+		}
 	}
+}
 
-	return FALSE;
+void GLFWCALL mouse(int x,int y) {
 }
 
 int main(int argc,char *argv[])
 {
-	g_thread_init(0);
-
 	action[0].f=action_end;
 	action_len++;
-
 
 	action[1].f=action_osc_square;
 	action[1].outlet=&action[2];
@@ -190,24 +217,33 @@ int main(int argc,char *argv[])
 	action[2].outlet=&action[0];
 	action_len++;
 
-	gtk_init(&argc,&argv);
-	window=gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW (window),"te");
-
-	g_signal_connect(window,"destroy",G_CALLBACK (gtk_main_quit),NULL);
-	gtk_widget_add_events(window,GDK_KEY_PRESS_MASK);
-
-        g_signal_connect(window,"key-press-event",G_CALLBACK(on_keypress),NULL);
-
-	GtkWidget *a=gtk_drawing_area_new();
-	gtk_container_add(GTK_CONTAINER(window),a);
-	g_signal_connect(a,"expose-event",G_CALLBACK(on_expose_event),NULL);
-	gtk_widget_show_all(window);
-
 	audio_init();
 
-	gtk_main();
-	
+
+	glfwInit();
+	glfwOpenWindow(1024,760,8,8,8,8,8,8,GLFW_WINDOW);
+	glfwSetMousePosCallback(mouse);
+	glfwSetKeyCallback(key);
+
+	glViewport(0,0,1024,760);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0,1024,760,0,1,10);
+	glMatrixMode(GL_MODELVIEW);
+	glClearColor(0.06f,0.12f,0.12f,0.0f);
+	glEnable(GL_TEXTURE_2D);
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+	glEnable(GL_BLEND); 
+	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	osc_square_icon=load("osc_square.icon",32,32);
+
+	for(;!doexit;) {
+		draw();
+		pa_mainloop_iterate(pa_ml,1,0);
+	}
+	glfwTerminate();
+
 	return 0;
 }
 
