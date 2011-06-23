@@ -13,6 +13,8 @@ struct action;
 typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t offset);
 
 struct action {
+	int x,y;
+
 	action_func f;
 	union {
 		void *p;
@@ -102,25 +104,26 @@ static void audio_underflow_cb(pa_stream *s, void *userdata) {
 }
 
 
-pa_mainloop *pa_ml;
+pa_threaded_mainloop *pa_ml;
 pa_stream *ps;
 
 void audio_init() {
-	pa_ml=pa_mainloop_new();
-	pa_mainloop_api *pa_mlapi=pa_mainloop_get_api(pa_ml);
+	pa_ml=pa_threaded_mainloop_new();
+	pa_mainloop_api *pa_mlapi=pa_threaded_mainloop_get_api(pa_ml);
 	pa_context *pa_ctx=pa_context_new(pa_mlapi, "te");
 	pa_context_connect(pa_ctx, NULL, 0, NULL);
 	int pa_ready = 0;
 	pa_context_set_state_callback(pa_ctx, pa_state_cb, &pa_ready);
 
-	while(pa_ready==0) { pa_mainloop_iterate(pa_ml,1,0); }
+	pa_threaded_mainloop_start(pa_ml);
+	while(pa_ready==0) { ; }
 
 	printf("audio ready\n");
 
 	if (pa_ready == 2) {
 		pa_context_disconnect(pa_ctx);
 		pa_context_unref(pa_ctx);
-		pa_mainloop_free(pa_ml);
+		pa_threaded_mainloop_free(pa_ml);
 	}
 
 	pa_sample_spec ss;
@@ -166,27 +169,31 @@ GLuint load(char *name,int w,int h) {
 // VISUAL
 //////////////////////////////////////////////////////////////////////////////////////////
 
-GLuint osc_square_icon=-1;
+GLuint icons=-1;
 
-void draw_icon(GLuint i,int x,int y, float a) {
+void draw_icon(int i,int x,int y, float a) {
 	glLoadIdentity();
 	glTranslatef(x,y,-2);
 	glRotatef(a,0,0,1);
-	glBindTexture(GL_TEXTURE_2D,osc_square_icon);
+
+	float pz=(1/4.0);
+	float tz=i*pz;
+
+	glBindTexture(GL_TEXTURE_2D,icons);
 	glBegin(GL_QUADS);
-	glTexCoord2f(0,0); glVertex2i(-16,-16);
-	glTexCoord2f(0,1); glVertex2i(-16,16);
-	glTexCoord2f(1,1); glVertex2i(16,16);
-	glTexCoord2f(1,0); glVertex2i(16,-16);
+	glTexCoord2f(tz,0); glVertex2i(-16,-16);
+	glTexCoord2f(tz,1); glVertex2i(-16,16);
+	glTexCoord2f(tz+pz,1); glVertex2i(16,16);
+	glTexCoord2f(tz+pz,0); glVertex2i(16,-16);
 	glEnd();
 }
 
 void draw() {
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-	static float a=0;
-	draw_icon(osc_square_icon,100,100,0);
-	draw_icon(osc_square_icon,200,200,a+=10);
+	draw_icon(0,100,100,0);
+	draw_icon(1,200,200,0);
+	draw_icon(2,300,200,0);
 
 	glfwSwapBuffers();
 }
@@ -207,14 +214,20 @@ void GLFWCALL mouse(int x,int y) {
 int main(int argc,char *argv[])
 {
 	action[0].f=action_end;
+	action[0].x=100;
+	action[0].y=100;
 	action_len++;
 
 	action[1].f=action_osc_square;
 	action[1].outlet=&action[2];
+	action[1].x=200;
+	action[1].y=200;
 	action_len++;
 
 	action[2].f=action_lowpass;
 	action[2].outlet=&action[0];
+	action[2].x=300;
+	action[2].y=300;
 	action_len++;
 
 	audio_init();
@@ -236,11 +249,10 @@ int main(int argc,char *argv[])
 	glEnable(GL_BLEND); 
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	osc_square_icon=load("osc_square.icon",32,32);
+	icons=load("icons.rgba",128,32);
 
 	for(;!doexit;) {
 		draw();
-		pa_mainloop_iterate(pa_ml,1,0);
 	}
 	glfwTerminate();
 
