@@ -32,6 +32,8 @@ struct action {
 } action[1024];
 int action_len=0;
 
+struct action *pickup=0;
+
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // ACTIONS
@@ -274,7 +276,29 @@ void GLFWCALL key(int k,int a) {
 	}
 }
 
+
+struct action *action_at(int x,int y) {
+	int i;
+	for(i=0;i<action_len;i++) {
+		struct action *p=&action[i];
+		int dx=p->x-x,dy=p->y-y;
+		if(sqrt(dx*dx+dy*dy)<16) { return p; }
+	}
+	return 0;
+}
+
+void GLFWCALL button(int b,int act) {
+	int x,y;
+	glfwGetMousePos(&x,&y);
+	if(act==GLFW_PRESS) {
+		pickup=action_at(x,y);
+	} else {
+		pickup=0;
+	}
+}
+
 void GLFWCALL mouse(int x,int y) {
+	if(pickup) { pickup->x=x; pickup->y=y; }
 }
 
 int main(int argc,char *argv[])
@@ -308,6 +332,7 @@ int main(int argc,char *argv[])
 	glfwInit();
 	glfwOpenWindow(1024,760,8,8,8,8,8,8,GLFW_WINDOW);
 	glfwSetMousePosCallback(mouse);
+	glfwSetMouseButtonCallback(button);
 	glfwSetKeyCallback(key);
 
 	glMatrixMode(GL_PROJECTION);
