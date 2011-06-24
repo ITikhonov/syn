@@ -186,16 +186,24 @@ void make_scope(int8_t scope[1024],int scope_width) {
 }
 
 void draw_scope(struct action *a) {
+	if(!a->outlet) return;
 	make_scope(a->scope,a->scope_width);
 
 	glLoadIdentity();
 	glTranslatef(a->x,a->y,-2);
 
+	float dx=a->outlet->x-a->x;
+	float dy=a->outlet->y-a->y;
+	float l=sqrt(dx*dx+dy*dy);
+	float angle=180*(atan2(dy,dx)/M_PI);
+	glRotatef(angle,0,0,1);
+	glScalef(l/a->scope_width,1,1);
+
 	glBegin(GL_QUADS);
-	glTexCoord2f(0,0); glVertex2i(0,0);
-	glTexCoord2f(1,0); glVertex2i(1024,0);
-	glTexCoord2f(1,1); glVertex2i(1024,16);
-	glTexCoord2f(0,1); glVertex2i(0,16);
+	glTexCoord2f(0,0); glVertex2i(0,-8);
+	glTexCoord2f(1,0); glVertex2i(1024,-8);
+	glTexCoord2f(1,1); glVertex2i(1024,8);
+	glTexCoord2f(0,1); glVertex2i(0,8);
 	glEnd();
 }
 
@@ -243,7 +251,6 @@ void draw() {
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
 		draw_icon(p->icon,p->x,p->y,0);
-		if(p->outlet) draw_connection(p->x,p->y,p->outlet->x,p->outlet->y);
 		draw_scope(p);
 	}
 
