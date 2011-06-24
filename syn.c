@@ -12,10 +12,10 @@ struct action;
 
 typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t offset);
 
-struct action {
-	int x,y,icon;
 
-	action_func f;
+struct action {
+	int x,y,def;
+
 	union {
 		void *p;
 		uint8_t u8;
@@ -61,6 +61,14 @@ void action_lowpass(struct action *a, float *input, float *output, uint32_t offs
 	a->f32=*output;
 }
 
+struct def {
+	action_func f;
+} def[3] = {
+		{action_osc_square},
+		{action_lowpass},
+		{action_end}
+	};
+
 //////////////////////////////////////////////////////////////////////////////////////////
 // EXECUTION
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -69,7 +77,7 @@ void execute(int b, uint32_t offset) {
 	int i;
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
-		p->f(p,&p->input[b],p->outlet?&p->outlet->input[b]:0,offset);
+		def[p->def].f(p,&p->input[b],p->outlet?&p->outlet->input[b]:0,offset);
 		if(p->outlet) p->scope[(p->scope_pos++)%p->scope_width]=127*p->outlet->input[b];
 	}
 }
@@ -264,7 +272,7 @@ void draw() {
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
 		draw_bar();
-		draw_icon(p->icon,p->x,p->y,0);
+		draw_icon(p->def,p->x,p->y,0);
 		draw_scope(p);
 	}
 
@@ -301,7 +309,11 @@ void GLFWCALL button(int b,int act) {
 	int x,y;
 	glfwGetMousePos(&x,&y);
 	if(act==GLFW_PRESS) {
-		pickup=action_at(x,y);
+		if(y<48) {
+			//int i=(x-32)/48;
+		} else {
+			pickup=action_at(x,y);
+		}
 	} else {
 		pickup=0;
 	}
@@ -313,24 +325,21 @@ void GLFWCALL mouse(int x,int y) {
 
 int main(int argc,char *argv[])
 {
-	action[0].f=action_end;
-	action[0].icon=2;
+	action[0].def=2;
 	action[0].x=100;
 	action[0].y=100;
 	action[0].scope_width=256;
 	action_len++;
 
-	action[1].f=action_osc_square;
+	action[1].def=0;
 	action[1].outlet=&action[2];
-	action[1].icon=0;
 	action[1].x=200;
 	action[1].y=200;
 	action[1].scope_width=860;
 	action_len++;
 
-	action[2].f=action_lowpass;
+	action[2].def=1;
 	action[2].outlet=&action[0];
-	action[2].icon=1;
 	action[2].x=300;
 	action[2].y=250;
 	action[2].scope_width=860;
