@@ -13,7 +13,7 @@ struct action;
 typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t offset);
 
 struct action {
-	int x,y;
+	int x,y,icon;
 
 	action_func f;
 	union {
@@ -22,6 +22,10 @@ struct action {
 		uint32_t u32;
 		float f32;
 	};
+
+	int8_t scope[1024];
+	int scope_pos;
+	int scope_width;
 
 	float input[2]; // double buffered
 	struct action *outlet;
@@ -64,6 +68,7 @@ void execute(int b, uint32_t offset) {
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
 		p->f(p,&p->input[b],p->outlet?&p->outlet->input[b]:0,offset);
+		if(p->outlet) p->scope[(p->scope_pos++)%p->scope_width]=127*p->outlet->input[b];
 	}
 }
 
@@ -165,6 +170,35 @@ GLuint load(char *name,int w,int h) {
 	return id;
 }
 
+GLuint scope_id;
+void make_scope(int8_t scope[1024],int scope_width) {
+	uint32_t data[16][1024];
+	int i;
+	memset(data,0,sizeof(data));
+	for(i=0;i<scope_width;i++) {
+		data[((uint8_t)(scope[i]+127))>>4][i]=0xffffffff;
+	}
+
+	glBindTexture(GL_TEXTURE_2D,scope_id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+   	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,1024,16,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
+}
+
+void draw_scope(struct action *a) {
+	make_scope(a->scope,a->scope_width);
+
+	glLoadIdentity();
+	glTranslatef(a->x,a->y,-2);
+
+	glBegin(GL_QUADS);
+	glTexCoord2f(0,0); glVertex2i(0,0);
+	glTexCoord2f(1,0); glVertex2i(1024,0);
+	glTexCoord2f(1,1); glVertex2i(1024,16);
+	glTexCoord2f(0,1); glVertex2i(0,16);
+	glEnd();
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 // VISUAL
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -186,14 +220,32 @@ void draw_icon(int i,int x,int y, float a) {
 	glTexCoord2f(tz+pz,1); glVertex2i(16,16);
 	glTexCoord2f(tz+pz,0); glVertex2i(16,-16);
 	glEnd();
+
+}
+
+void draw_connection(int ax,int ay,int bx, int by) {
+	glLoadIdentity();
+	glTranslatef(0,0,-2);
+	glDisable(GL_TEXTURE_2D);
+	glColor3f(1,1,1);
+	glBegin(GL_LINES);
+	glVertex2i(ax,ay);
+	glVertex2i(bx,by);
+	glEnd();
+	glEnable(GL_TEXTURE_2D);
+
 }
 
 void draw() {
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-	draw_icon(0,100,100,0);
-	draw_icon(1,200,200,0);
-	draw_icon(2,300,200,0);
+	int i;
+	for(i=0;i<action_len;i++) {
+		struct action *p=&action[i];
+		draw_icon(p->icon,p->x,p->y,0);
+		if(p->outlet) draw_connection(p->x,p->y,p->outlet->x,p->outlet->y);
+		draw_scope(p);
+	}
 
 	glfwSwapBuffers();
 }
@@ -204,6 +256,11 @@ void GLFWCALL key(int k,int a) {
 	if(a==GLFW_PRESS) {
 		switch(k) {
 		case GLFW_KEY_ESC: doexit=1; break;
+		case GLFW_KEY_SPACE:
+			pa_stream_cork(ps,!pa_stream_is_corked(ps),0,0);
+			printf("cork\n");
+			
+			break;
 		}
 	}
 }
@@ -214,20 +271,26 @@ void GLFWCALL mouse(int x,int y) {
 int main(int argc,char *argv[])
 {
 	action[0].f=action_end;
+	action[0].icon=2;
 	action[0].x=100;
 	action[0].y=100;
+	action[0].scope_width=256;
 	action_len++;
 
 	action[1].f=action_osc_square;
 	action[1].outlet=&action[2];
+	action[1].icon=0;
 	action[1].x=200;
 	action[1].y=200;
+	action[1].scope_width=686;
 	action_len++;
 
 	action[2].f=action_lowpass;
 	action[2].outlet=&action[0];
+	action[2].icon=1;
 	action[2].x=300;
-	action[2].y=300;
+	action[2].y=250;
+	action[2].scope_width=342;
 	action_len++;
 
 	audio_init();
@@ -238,7 +301,6 @@ int main(int argc,char *argv[])
 	glfwSetMousePosCallback(mouse);
 	glfwSetKeyCallback(key);
 
-	glViewport(0,0,1024,760);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glOrtho(0,1024,760,0,1,10);
@@ -249,7 +311,9 @@ int main(int argc,char *argv[])
 	glEnable(GL_BLEND); 
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+
 	icons=load("icons.rgba",128,32);
+	glGenTextures(1, &scope_id);
 
 	for(;!doexit;) {
 		draw();
