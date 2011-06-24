@@ -248,12 +248,22 @@ void draw_connection(int ax,int ay,int bx, int by) {
 
 }
 
+
+void draw_bar() {
+	int i;
+	for(i=0;i<3;i++) {
+		draw_icon(i,32+48*i,32,0);
+	}
+}
+
+
 void draw() {
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
 	int i;
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
+		draw_bar();
 		draw_icon(p->icon,p->x,p->y,0);
 		draw_scope(p);
 	}
