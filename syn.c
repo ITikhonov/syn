@@ -199,11 +199,13 @@ void draw_scope(struct action *a) {
 	glRotatef(angle,0,0,1);
 	glScalef(l/a->scope_width,1,1);
 
+	float shift=(a->scope_pos%a->scope_width)/a->scope_width;
+
 	glBegin(GL_QUADS);
-	glTexCoord2f(0,0); glVertex2i(0,-8);
-	glTexCoord2f(1,0); glVertex2i(1024,-8);
-	glTexCoord2f(1,1); glVertex2i(1024,8);
-	glTexCoord2f(0,1); glVertex2i(0,8);
+	glTexCoord2f(shift,0); glVertex2i(0,-8);
+	glTexCoord2f(shift+1,0); glVertex2i(1024,-8);
+	glTexCoord2f(shift+1,1); glVertex2i(1024,8);
+	glTexCoord2f(shift,1); glVertex2i(0,8);
 	glEnd();
 }
 
@@ -289,7 +291,7 @@ int main(int argc,char *argv[])
 	action[1].icon=0;
 	action[1].x=200;
 	action[1].y=200;
-	action[1].scope_width=686;
+	action[1].scope_width=860;
 	action_len++;
 
 	action[2].f=action_lowpass;
@@ -297,7 +299,7 @@ int main(int argc,char *argv[])
 	action[2].icon=1;
 	action[2].x=300;
 	action[2].y=250;
-	action[2].scope_width=342;
+	action[2].scope_width=860;
 	action_len++;
 
 	audio_init();
