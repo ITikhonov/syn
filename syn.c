@@ -44,16 +44,19 @@ void action_end(struct action *a, float *input, float *output, uint32_t offset) 
 }
 
 void action_osc_sine(struct action *a, float *input, float *output, uint32_t offset) {
+	if(!output) return;
 	float seconds=offset/96000.0;
 	*output=sin(seconds * 440 * 2*M_PI);
 }
 
 void action_osc_square(struct action *a, float *input, float *output, uint32_t offset) {
+	if(!output) return;
 	float seconds=offset/96000.0;
 	*output=(((uint32_t)(seconds*440))&1) ? -1 : 1;
 }
 
 void action_lowpass(struct action *a, float *input, float *output, uint32_t offset) {
+	if(!output) return;
 	float RC=1/(2*M_PI*440*4);
 	float dt=(1/96000.0);
 	float alpha=dt/(RC+dt);
@@ -310,7 +313,14 @@ void GLFWCALL button(int b,int act) {
 	glfwGetMousePos(&x,&y);
 	if(act==GLFW_PRESS) {
 		if(y<48) {
-			//int i=(x-32)/48;
+			unsigned int i=(x-16)/48;
+			if(i>=3) return;
+
+			action[action_len].def=i;
+			action[action_len].scope_width=256;
+			pickup=&action[action_len];
+			action_len++;
+			
 		} else {
 			pickup=action_at(x,y);
 		}
