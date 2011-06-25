@@ -70,11 +70,14 @@ void action_lowpass(struct action *a, float *input, float *output, uint32_t offs
 
 struct def {
 	action_func f;
-} def[3] = {
+} def[] = {
 		{action_osc_square},
 		{action_lowpass},
-		{action_end}
+		{action_end},
+		{action_osc_sine},
 	};
+
+const int deflen=sizeof(def)/sizeof(*def);
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // EXECUTION
@@ -276,7 +279,7 @@ void draw_connection(int ax,int ay,int bx, int by) {
 
 void draw_bar() {
 	int i;
-	for(i=0;i<3;i++) {
+	for(i=0;i<deflen;i++) {
 		draw_icon(i,32+48*i,32,0);
 	}
 }
@@ -355,7 +358,7 @@ void GLFWCALL button(int b,int act) {
 	if(act==GLFW_PRESS) {
 		if(y<48) {
 			unsigned int i=(x-16)/48;
-			if(i>=3) return;
+			if(i>=deflen) return;
 
 			memset(&action[action_len],0,sizeof(action[action_len]));
 			action[action_len].def=i;
