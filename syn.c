@@ -39,8 +39,10 @@ struct action *pickup=0;
 // ACTIONS
 //////////////////////////////////////////////////////////////////////////////////////////
 
+float end;
+
 void action_end(struct action *a, float *input, float *output, uint32_t offset) {
-	// just for storing inputs
+	end=*input;
 }
 
 void action_osc_sine(struct action *a, float *input, float *output, uint32_t offset) {
@@ -111,7 +113,7 @@ static void audio_request_cb(pa_stream *s, size_t length, void *userdata) {
 	for(i=0;i<length/4;i++) {
 		int b=(offset+i)&1;
 		execute(b,offset+i);
-		buf[i]=0x7fff * action[0].input[b];
+		buf[i]=0x7fff * end;
 	}
 	offset+=i;
 	pa_stream_write(s,buf,length,0,0,PA_SEEK_RELATIVE);
@@ -333,6 +335,12 @@ void GLFWCALL mouse(int x,int y) {
 	if(pickup) { pickup->x=x; pickup->y=y; }
 }
 
+double prectime() {
+	struct timeval t;
+	gettimeofday(&t,0);
+	return t.tv_sec+t.tv_usec/1e6;
+}
+
 int main(int argc,char *argv[])
 {
 	action[0].def=2;
@@ -379,6 +387,16 @@ int main(int argc,char *argv[])
 	glGenTextures(1, &scope_id);
 
 	for(;!doexit;) {
+		double pt=prectime();
+		float dx=2*sin(pt/M_PI);
+		float dy=2*sin(pt/M_PI);
+		printf("dx %f\n",dx);
+
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		glOrtho(dx,1024+dx,dy+760,dy,1,10);
+		glMatrixMode(GL_MODELVIEW);
+
 		draw();
 	}
 	glfwTerminate();
