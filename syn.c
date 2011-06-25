@@ -48,19 +48,21 @@ void action_end(struct action *a, float *input, float *output, uint32_t offset) 
 void action_osc_sine(struct action *a, float *input, float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	*output+=sin(seconds * 440 * 2*M_PI);
+	float freq=440+exp2(*input);
+	*output+=sin(seconds*freq*2*M_PI);
 }
 
 void action_osc_square(struct action *a, float *input, float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	float freq=440+a->f32;
+	float freq=440+exp2(*input);
 	*output+=(((uint32_t)(seconds*freq))&1) ? -1 : 1;
 }
 
 void action_lowpass(struct action *a, float *input, float *output, uint32_t offset) {
 	if(!output) return;
-	float RC=1/(2*M_PI*440*4);
+	float freq=440+exp2(*input);
+	float RC=1/(2*M_PI*freq);
 	float dt=(1/96000.0);
 	float alpha=dt/(RC+dt);
 	float v=alpha*(*input) + (1-alpha) * a->f32;
