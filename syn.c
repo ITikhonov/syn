@@ -54,7 +54,8 @@ void action_osc_sine(struct action *a, float *input, float *output, uint32_t off
 void action_osc_square(struct action *a, float *input, float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	*output+=(((uint32_t)(seconds*440))&1) ? -1 : 1;
+	float freq=440+a->f32;
+	*output+=(((uint32_t)(seconds*freq))&1) ? -1 : 1;
 }
 
 void action_lowpass(struct action *a, float *input, float *output, uint32_t offset) {
@@ -356,6 +357,7 @@ void GLFWCALL button(int b,int act) {
 			unsigned int i=(x-16)/48;
 			if(i>=3) return;
 
+			memset(&action[action_len],0,sizeof(action[action_len]));
 			action[action_len].def=i;
 			action[action_len].scope_width=860;
 			pickup=&action[action_len];
@@ -381,6 +383,8 @@ double prectime() {
 
 int main(int argc,char *argv[])
 {
+	memset(action,0,sizeof(action));
+
 	action[0].def=2;
 	action[0].x=100;
 	action[0].y=100;
