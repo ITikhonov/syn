@@ -48,13 +48,13 @@ void action_end(struct action *a, float *input, float *output, uint32_t offset) 
 void action_osc_sine(struct action *a, float *input, float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	*output=sin(seconds * 440 * 2*M_PI);
+	*output+=sin(seconds * 440 * 2*M_PI);
 }
 
 void action_osc_square(struct action *a, float *input, float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	*output=(((uint32_t)(seconds*440))&1) ? -1 : 1;
+	*output+=(((uint32_t)(seconds*440))&1) ? -1 : 1;
 }
 
 void action_lowpass(struct action *a, float *input, float *output, uint32_t offset) {
@@ -62,8 +62,9 @@ void action_lowpass(struct action *a, float *input, float *output, uint32_t offs
 	float RC=1/(2*M_PI*440*4);
 	float dt=(1/96000.0);
 	float alpha=dt/(RC+dt);
-	*output = alpha*(*input) + (1-alpha) * a->f32;
-	a->f32=*output;
+	float v=alpha*(*input) + (1-alpha) * a->f32;
+	*output+=v;
+	a->f32=v;
 }
 
 struct def {
@@ -82,8 +83,18 @@ void execute(int b, uint32_t offset) {
 	int i;
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
-		def[p->def].f(p,&p->input[b],p->outlet?&p->outlet->input[b]:0,offset);
-		if(p->outlet) p->scope[(p->scope_pos++)%p->scope_width]=127*p->outlet->input[b];
+		p->input[b]=0;
+	}
+
+	for(i=0;i<action_len;i++) {
+		struct action *p=&action[i];
+		float out=0;
+		def[p->def].f(p,&p->input[!b],&out,offset);
+
+		if(p->outlet) {
+			p->outlet->input[b]+=out;
+			p->scope[(p->scope_pos++)%p->scope_width]=127*out;
+		}
 	}
 }
 
@@ -218,8 +229,8 @@ void draw_scope(struct action *a) {
 
 	glBegin(GL_QUADS);
 	glTexCoord2f(shift,0); glVertex2i(0,-8);
-	glTexCoord2f(shift+1,0); glVertex2i(1024,-8);
-	glTexCoord2f(shift+1,1); glVertex2i(1024,8);
+	glTexCoord2f(shift+1,0); glVertex2i(1024,-2);
+	glTexCoord2f(shift+1,1); glVertex2i(1024,2);
 	glTexCoord2f(shift,1); glVertex2i(0,8);
 	glEnd();
 }
@@ -346,7 +357,7 @@ void GLFWCALL button(int b,int act) {
 			if(i>=3) return;
 
 			action[action_len].def=i;
-			action[action_len].scope_width=256;
+			action[action_len].scope_width=860;
 			pickup=&action[action_len];
 			action_len++;
 			
