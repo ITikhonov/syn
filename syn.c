@@ -310,6 +310,33 @@ struct action *action_at(int x,int y) {
 	return 0;
 }
 
+struct action *nearest(struct action *p,float *rd) {
+	float md=INFINITY;
+	struct action *m=0;
+
+	int k; for(k=0;k<action_len;k++) {
+		struct action *o=&action[k];
+		if(o==p) continue;
+
+		int dx=p->x-o->x,dy=p->y-o->y;
+		float d=sqrt(dx*dx+dy*dy);
+		if(d<md) { md=d; m=o; }
+	}
+
+	*rd=md;
+	return m;
+}
+
+void relink(struct action *p) {
+	float d;
+	struct action *n=nearest(p,&d);
+	if(n&&d<200) {
+		p->outlet=n;
+	} else {
+		p->outlet=0;
+	}
+}
+
 void GLFWCALL button(int b,int act) {
 	int x,y;
 	glfwGetMousePos(&x,&y);
@@ -332,7 +359,7 @@ void GLFWCALL button(int b,int act) {
 }
 
 void GLFWCALL mouse(int x,int y) {
-	if(pickup) { pickup->x=x; pickup->y=y; }
+	if(pickup) { pickup->x=x; pickup->y=y; relink(pickup); }
 }
 
 double prectime() {
@@ -390,7 +417,6 @@ int main(int argc,char *argv[])
 		double pt=prectime();
 		float dx=2*sin(pt/M_PI);
 		float dy=2*sin(pt/M_PI);
-		printf("dx %f\n",dx);
 
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
