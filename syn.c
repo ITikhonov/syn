@@ -27,8 +27,8 @@ struct action {
 	int scope_pos;
 	int scope_width;
 
-	float input[2]; // double buffered
-	struct action *outlet;
+	float input[2][4]; // double buffered
+	struct action *outlet; int outletno;
 } action[1024];
 int action_len=0;
 
@@ -41,31 +41,31 @@ struct action *pickup=0;
 
 float end;
 
-void action_end(struct action *a, float *input, float *output, uint32_t offset) {
-	end=*input;
+void action_end(struct action *a, float input[4], float *output, uint32_t offset) {
+	end=input[0];
 }
 
-void action_osc_sine(struct action *a, float *input, float *output, uint32_t offset) {
+void action_osc_sine(struct action *a, float input[4], float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	float freq=440+exp2(*input);
+	float freq=440+exp2(input[0]);
 	*output+=sin(seconds*freq*2*M_PI);
 }
 
-void action_osc_square(struct action *a, float *input, float *output, uint32_t offset) {
+void action_osc_square(struct action *a, float input[4], float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
-	float freq=440+exp2(*input);
+	float freq=440+exp2(input[0]);
 	*output+=(((uint32_t)(seconds*freq))&1) ? -1 : 1;
 }
 
-void action_lowpass(struct action *a, float *input, float *output, uint32_t offset) {
+void action_lowpass(struct action *a, float input[4], float *output, uint32_t offset) {
 	if(!output) return;
-	float freq=440+exp2(*input);
+	float freq=440+exp2(input[1]);
 	float RC=1/(2*M_PI*freq);
 	float dt=(1/96000.0);
 	float alpha=dt/(RC+dt);
-	float v=alpha*(*input) + (1-alpha) * a->f32;
+	float v=alpha*(input[0]) + (1-alpha) * a->f32;
 	*output+=v;
 	a->f32=v;
 }
@@ -89,16 +89,19 @@ void execute(int b, uint32_t offset) {
 	int i;
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
-		p->input[b]=0;
+		p->input[b][0]=0;
+		p->input[b][1]=0;
+		p->input[b][2]=0;
+		p->input[b][3]=0;
 	}
 
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
 		float out=0;
-		def[p->def].f(p,&p->input[!b],&out,offset);
+		def[p->def].f(p,p->input[!b],&out,offset);
 
 		if(p->outlet) {
-			p->outlet->input[b]+=out;
+			p->outlet->input[b][p->outletno]+=out;
 			p->scope[(p->scope_pos++)%p->scope_width]=127*out;
 		}
 	}
@@ -398,6 +401,7 @@ int main(int argc,char *argv[])
 
 	action[1].def=0;
 	action[1].outlet=&action[2];
+	action[1].outletno=0;
 	action[1].x=200;
 	action[1].y=200;
 	action[1].scope_width=860;
@@ -405,6 +409,7 @@ int main(int argc,char *argv[])
 
 	action[2].def=1;
 	action[2].outlet=&action[0];
+	action[1].outletno=0;
 	action[2].x=300;
 	action[2].y=250;
 	action[2].scope_width=860;
