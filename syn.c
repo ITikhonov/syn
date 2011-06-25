@@ -227,8 +227,13 @@ void draw_scope(struct action *a) {
 	glLoadIdentity();
 	glTranslatef(a->x,a->y,-2);
 
-	float dx=a->outlet->x-a->x;
-	float dy=a->outlet->y-a->y;
+	int nx=a->outlet->x;
+	int ny=a->outlet->y;
+	nx+=16*cos(a->outletno*(M_PI/2));
+	ny+=16*sin(a->outletno*(M_PI/2));
+
+	float dx=nx-a->x;
+	float dy=ny-a->y;
 	float l=sqrt(dx*dx+dy*dy);
 	float angle=180*(atan2(dy,dx)/M_PI);
 	glRotatef(angle,0,0,1);
@@ -242,6 +247,17 @@ void draw_scope(struct action *a) {
 	glTexCoord2f(shift+1,1); glVertex2i(1024,2);
 	glTexCoord2f(shift,1); glVertex2i(0,8);
 	glEnd();
+
+	glLoadIdentity();
+	glTranslatef(nx,ny,-2);
+	glDisable(GL_TEXTURE_2D);
+	glBegin(GL_QUADS);
+	glVertex2i(-2,-2);
+	glVertex2i( 2,-2);
+	glVertex2i( 2, 2);
+	glVertex2i(-2, 2);
+	glEnd();
+	glEnable(GL_TEXTURE_2D);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -330,9 +346,10 @@ struct action *action_at(int x,int y) {
 	return 0;
 }
 
-struct action *nearest(struct action *p,float *rd) {
+struct action *nearest(struct action *p,float *rd,int *no) {
 	float md=INFINITY;
 	struct action *m=0;
+	float angle=0;
 
 	int k; for(k=0;k<action_len;k++) {
 		struct action *o=&action[k];
@@ -340,18 +357,26 @@ struct action *nearest(struct action *p,float *rd) {
 
 		int dx=p->x-o->x,dy=p->y-o->y;
 		float d=sqrt(dx*dx+dy*dy);
-		if(d<md) { md=d; m=o; }
+		if(d<md) {
+			md=d; m=o;
+			angle=atan2(-dy,-dx);
+		}
 	}
 
 	*rd=md;
+	int mno=2+round(angle/(M_PI/2));
+	if(mno<0 || mno>3) { mno=0; }
+	*no=mno;
 	return m;
 }
 
 void relink(struct action *p) {
 	float d;
-	struct action *n=nearest(p,&d);
+	int no;
+	struct action *n=nearest(p,&d,&no);
 	if(n&&d<200) {
 		p->outlet=n;
+		p->outletno=no;
 	} else {
 		p->outlet=0;
 	}
@@ -376,6 +401,11 @@ void GLFWCALL button(int b,int act) {
 		}
 	} else {
 		pickup=0;
+		int i;
+		for(i=0;i<action_len;i++) {
+			struct action *p=&action[i];
+			printf("%u: (%u) %u\n",i,p->def,p->outletno);
+		}
 	}
 }
 
