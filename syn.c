@@ -14,11 +14,12 @@ typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t
 
 struct envelope {
 	struct tick {
-		enum { CMD_END, CMD_SET } cmd;
+		enum { CMD_END, CMD_SET, CMD_LOOP } cmd;
 		int pos; // in samples, negative for special stuff
 		float v;
 	} tick[1024];
 	uint32_t idx;
+	int doffset;
 };
 
 struct action {
@@ -96,8 +97,9 @@ const int deflen=sizeof(def)/sizeof(*def);
 //////////////////////////////////////////////////////////////////////////////////////////
 
 float envelope_val(struct envelope *e, uint32_t offset) {
-	while(e->tick[e->idx+1].pos < offset) {
+	while(e->tick[e->idx+1].pos < offset+e->doffset) {
 		if(e->tick[e->idx].cmd==CMD_END) return 0;
+		if(e->tick[e->idx].cmd==CMD_LOOP) { e->doffset+=-e->tick[e->idx].pos; e->idx=0; continue; }
 		e->idx++;
 	}
 	return e->tick[e->idx].v;
@@ -288,6 +290,41 @@ void draw_scope(struct action *a) {
 // VISUAL
 //////////////////////////////////////////////////////////////////////////////////////////
 
+void draw_envelope(struct envelope *e,int x,int y) {
+	glLoadIdentity();
+	glTranslatef(x,y,-2);
+
+	glDisable(GL_TEXTURE_2D);
+	glBegin(GL_LINE_STRIP);
+	glVertex2i(0,0);
+	int i; for(i=0;i<1024;i++) {
+		if(e->tick[i].cmd==CMD_END) break;
+		glVertex2f(e->tick[i].pos/960.0,e->tick[i].v*100);
+	}
+	glEnd();
+
+	glBegin(GL_QUADS);
+	for(i=0;i<1024;i++) {
+		if(e->tick[i].cmd==CMD_END) break;
+		float px=e->tick[i].pos/960.0,py=e->tick[i].v*100;
+
+		switch(e->tick[i].cmd) {
+		case CMD_LOOP: glColor3f(0,1,0); break;
+		case CMD_SET: 
+		case CMD_END: glColor3f(1,1,1);
+		}
+
+		if(i==e->idx) glColor3f(1,0,0);
+		glVertex2f(px-4,py-4);
+		glVertex2f(px+4,py-4);
+		glVertex2f(px+4,py+4);
+		glVertex2f(px-4,py+4);
+	}
+	glColor3f(1,1,1);
+	glEnd();
+	glEnable(GL_TEXTURE_2D);
+}
+
 GLuint icons=-1;
 
 void draw_icon(int i,int x,int y, float a) {
@@ -340,6 +377,8 @@ void draw() {
 		draw_icon(p->def,p->x,p->y,0);
 		draw_scope(p);
 	}
+
+	draw_envelope(action[1].env,100,500);
 
 	glfwSwapBuffers();
 }
@@ -464,25 +503,21 @@ int main(int argc,char *argv[])
 
 	action[2].def=1;
 	action[2].outlet=&action[0];
-	action[1].outletno=0;
+	action[2].outletno=0;
 	action[2].x=300;
 	action[2].y=250;
 	action[2].scope_width=860;
 
-	action[2].env[0].tick[0].cmd=CMD_SET;
-	action[2].env[0].tick[0].pos=0;
-	action[2].env[0].tick[0].v=1;
+	action[1].env[0].tick[0].cmd=CMD_SET;
+	action[1].env[0].tick[0].pos=0;
+	action[1].env[0].tick[0].v=1;
 
-	action[2].env[0].tick[1].cmd=CMD_SET;
-	action[2].env[0].tick[1].pos=96000*1;
-	action[2].env[0].tick[1].v=-1;
+	action[1].env[0].tick[1].cmd=CMD_SET;
+	action[1].env[0].tick[1].pos=96000*1;
+	action[1].env[0].tick[1].v=-1;
 
-	action[2].env[0].tick[1].cmd=CMD_SET;
-	action[2].env[0].tick[1].pos=96000*100;
-	action[2].env[0].tick[1].v=1;
-
-
-
+	action[1].env[0].tick[2].cmd=CMD_LOOP;
+	action[1].env[0].tick[2].pos=96000*2;
 	action_len++;
 
 	audio_init();
