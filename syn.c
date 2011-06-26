@@ -12,6 +12,14 @@ struct action;
 
 typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t offset);
 
+struct envelope {
+	struct tick {
+		enum { CMD_END, CMD_SET } cmd;
+		int pos; // in samples, negative for special stuff
+		float v;
+	} tick[1024];
+	uint32_t idx;
+};
 
 struct action {
 	int x,y,def;
@@ -26,6 +34,8 @@ struct action {
 	int8_t scope[1024];
 	int scope_pos;
 	int scope_width;
+
+	struct envelope env[4];
 
 	float input[2][4]; // double buffered
 	struct action *outlet; int outletno;
@@ -85,15 +95,29 @@ const int deflen=sizeof(def)/sizeof(*def);
 // EXECUTION
 //////////////////////////////////////////////////////////////////////////////////////////
 
-void execute(int b, uint32_t offset) {
+float envelope_val(struct envelope *e, uint32_t offset) {
+	while(e->tick[e->idx+1].pos < offset) {
+		if(e->tick[e->idx].cmd==CMD_END) return 0;
+		e->idx++;
+	}
+	return e->tick[e->idx].v;
+}
+
+void calculate_envelopes(int b,uint32_t offset) {
 	int i;
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
-		p->input[b][0]=0;
-		p->input[b][1]=0;
-		p->input[b][2]=0;
-		p->input[b][3]=0;
+
+		p->input[b][0]=envelope_val(&p->env[0],offset);
+		p->input[b][1]=envelope_val(&p->env[1],offset);
+		p->input[b][2]=envelope_val(&p->env[2],offset);
+		p->input[b][3]=envelope_val(&p->env[3],offset);
 	}
+}
+
+void execute(int b, uint32_t offset) {
+	calculate_envelopes(b,offset);
+	int i;
 
 	for(i=0;i<action_len;i++) {
 		struct action *p=&action[i];
@@ -327,6 +351,7 @@ void GLFWCALL key(int k,int a) {
 		switch(k) {
 		case GLFW_KEY_ESC: doexit=1; break;
 		case GLFW_KEY_SPACE:
+			offset=0;
 			pa_stream_cork(ps,!pa_stream_is_corked(ps),0,0);
 			printf("cork\n");
 			
@@ -443,6 +468,21 @@ int main(int argc,char *argv[])
 	action[2].x=300;
 	action[2].y=250;
 	action[2].scope_width=860;
+
+	action[2].env[0].tick[0].cmd=CMD_SET;
+	action[2].env[0].tick[0].pos=0;
+	action[2].env[0].tick[0].v=1;
+
+	action[2].env[0].tick[1].cmd=CMD_SET;
+	action[2].env[0].tick[1].pos=96000*1;
+	action[2].env[0].tick[1].v=-1;
+
+	action[2].env[0].tick[1].cmd=CMD_SET;
+	action[2].env[0].tick[1].pos=96000*100;
+	action[2].env[0].tick[1].v=1;
+
+
+
 	action_len++;
 
 	audio_init();
