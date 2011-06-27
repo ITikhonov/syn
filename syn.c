@@ -290,18 +290,37 @@ void draw_scope(struct action *a) {
 // VISUAL
 //////////////////////////////////////////////////////////////////////////////////////////
 
+struct tick *drag_tick=0;
+
 void draw_envelope(struct envelope *e,int x,int y) {
 	glLoadIdentity();
 	glTranslatef(x,y,-2);
 
 	glDisable(GL_TEXTURE_2D);
+	glBegin(GL_LINES);
+	glVertex2i(0,0);
+	glVertex2i(1000,0);
+	glEnd();
+
+	int i; 
+	glBegin(GL_LINES);
+	for(i=0;i<100;i++) {
+		if(i%4==0) glColor3f(1,1,1);
+		else glColor3f(.5,.5,.5);
+	glVertex2f((i*24000)/960.0,-100);
+	glVertex2f((i*24000)/960.0,100);
+	}
+	glEnd();
+
+	glColor3f(1,1,1);
 	glBegin(GL_LINE_STRIP);
 	glVertex2i(0,0);
-	int i; for(i=0;i<1024;i++) {
+	for(i=0;i<1024;i++) {
 		if(e->tick[i].cmd==CMD_END) break;
 		glVertex2f(e->tick[i].pos/960.0,e->tick[i].v*100);
 	}
 	glEnd();
+
 
 	glBegin(GL_QUADS);
 	for(i=0;i<1024;i++) {
@@ -315,6 +334,7 @@ void draw_envelope(struct envelope *e,int x,int y) {
 		}
 
 		if(i==e->idx) glColor3f(1,0,0);
+		if(drag_tick==&e->tick[i]) glColor3f(1,1,0);
 		glVertex2f(px-4,py-4);
 		glVertex2f(px+4,py-4);
 		glVertex2f(px+4,py+4);
@@ -366,6 +386,8 @@ void draw_bar() {
 	}
 }
 
+struct envelope *show_envelope=0;
+
 
 void draw() {
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -378,17 +400,19 @@ void draw() {
 		draw_scope(p);
 	}
 
-	draw_envelope(action[1].env,100,500);
+	if(show_envelope) draw_envelope(show_envelope,100,500);
 
 	glfwSwapBuffers();
 }
 
 int doexit=0;
 
+
 void GLFWCALL key(int k,int a) {
 	if(a==GLFW_PRESS) {
 		switch(k) {
 		case GLFW_KEY_ESC: doexit=1; break;
+		case GLFW_KEY_TAB: show_envelope=show_envelope?0:action[1].env; break;
 		case GLFW_KEY_SPACE:
 			offset=0;
 			pa_stream_cork(ps,!pa_stream_is_corked(ps),0,0);
@@ -446,9 +470,31 @@ void relink(struct action *p) {
 	}
 }
 
+void button_envelope(int x,int y,int act) {
+	// draw_envelope(show_envelope,100,500);
+	const int x0=100,y0=500;
+	if(act==GLFW_PRESS) {
+		int i;
+		struct envelope *e=show_envelope;
+		for(i=0;i<1024;i++) {
+			if(e->tick[i].cmd==CMD_END) break;
+			float px=x0+e->tick[i].pos/960.0,py=y0+e->tick[i].v*100;
+			float dx=px-x,dy=py-y;
+			if(sqrt(dx*dx+dy*dy)<16) {
+				drag_tick=&e->tick[i];
+				break;
+			}
+		}
+		
+	} else {
+		drag_tick=0;
+	}
+}
+
 void GLFWCALL button(int b,int act) {
 	int x,y;
 	glfwGetMousePos(&x,&y);
+	if(show_envelope) { button_envelope(x,y,act); return; }
 	if(act==GLFW_PRESS) {
 		if(y<48) {
 			unsigned int i=(x-16)/48;
@@ -474,7 +520,16 @@ void GLFWCALL button(int b,int act) {
 }
 
 void GLFWCALL mouse(int x,int y) {
-	if(pickup) { pickup->x=x; pickup->y=y; relink(pickup); }
+	const int x0=100,y0=500;
+	if(pickup) { pickup->x=x; pickup->y=y; relink(pickup); }	
+	if(drag_tick) {
+		float v=(y-y0)/100.0;
+		float pos=(x-x0)*960.0;
+
+		if(pos<0) { pos=0; }
+		drag_tick->v=v;
+		drag_tick->pos=pos;
+	}
 }
 
 double prectime() {
@@ -538,21 +593,14 @@ int main(int argc,char *argv[])
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 	glEnable(GL_BLEND); 
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_LINE_SMOOTH); 
+	glHint(GL_LINE_SMOOTH, GL_NICEST);
 
 
 	icons=load("icons.rgba",128,32);
 	glGenTextures(1, &scope_id);
 
 	for(;!doexit;) {
-		double pt=prectime();
-		float dx=2*sin(pt/M_PI);
-		float dy=2*sin(pt/M_PI);
-
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		glOrtho(dx,1024+dx,dy+760,dy,1,10);
-		glMatrixMode(GL_MODELVIEW);
-
 		draw();
 	}
 	glfwTerminate();
