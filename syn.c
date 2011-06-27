@@ -237,7 +237,7 @@ void make_scope(int8_t scope[1024],int scope_width) {
 	int i;
 	memset(data,0,sizeof(data));
 	for(i=0;i<scope_width;i++) {
-		data[((uint8_t)(scope[i]+127))>>4][i]=0xffffffff;
+		data[((uint8_t)(scope[i]+127))>>5][i]=0xffffffff;
 	}
 
 	glBindTexture(GL_TEXTURE_2D,scope_id);
@@ -268,10 +268,10 @@ void draw_scope(struct action *a) {
 	float shift=(a->scope_pos%a->scope_width)/a->scope_width;
 
 	glBegin(GL_QUADS);
-	glTexCoord2f(shift,0); glVertex2i(0,-8);
+	glTexCoord2f(shift,0); glVertex2i(0,-16);
 	glTexCoord2f(shift+1,0); glVertex2i(1024,-2);
 	glTexCoord2f(shift+1,1); glVertex2i(1024,2);
-	glTexCoord2f(shift,1); glVertex2i(0,8);
+	glTexCoord2f(shift,1); glVertex2i(0,16);
 	glEnd();
 
 	glLoadIdentity();
