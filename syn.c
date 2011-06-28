@@ -590,6 +590,7 @@ void GLFWCALL mouse(int x,int y) {
 		if(pos<0) { pos=0; }
 		drag_tick->v=v;
 		drag_tick->pos=pos;
+		compile_envelope(&action[1].env[0]);
 	}
 }
 
