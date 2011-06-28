@@ -15,7 +15,7 @@ typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t
 struct envelope {
 	struct tick {
 		enum { CMD_END, CMD_SET, CMD_LOOP } cmd;
-		int pos; // in samples
+		uint32_t pos; // in samples
 		float v;
 	} tick[1024];
 	int ticklen;
@@ -554,9 +554,14 @@ void sortticks(struct envelope *e) {
 			if(i==0) i=1;
 		}
 	}
+
+	for(i=e->ticklen-1;e->ticklen>0;i=e->ticklen-1) {
+		if(t[i].pos==-1) e->ticklen--;
+		else break;
+	}
 }
 
-void button_envelope(int x,int y,int act) {
+void button_envelope(int b,int x,int y,int act) {
 	const int x0=100,y0=500;
 	if(act==GLFW_PRESS) {
 		int i;
@@ -580,6 +585,13 @@ void button_envelope(int x,int y,int act) {
 			drag_tick=t;
 			sortticks(e);
 			compile_envelope(e);
+		} else {
+			if(b==GLFW_MOUSE_BUTTON_RIGHT) {
+				drag_tick->pos=-1;
+				drag_tick=0;
+				sortticks(e);
+				compile_envelope(e);
+			}
 		}
 
 	} else {
@@ -590,7 +602,7 @@ void button_envelope(int x,int y,int act) {
 void GLFWCALL button(int b,int act) {
 	int x,y;
 	glfwGetMousePos(&x,&y);
-	if(show_envelope) { button_envelope(x,y,act); return; }
+	if(show_envelope) { button_envelope(b,x,y,act); return; }
 	if(act==GLFW_PRESS) {
 		if(y<48) {
 			unsigned int i=(x-16)/48;
