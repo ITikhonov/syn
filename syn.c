@@ -63,28 +63,32 @@ void compile_prog(struct prog *p,int op,int x,float v) {
 	p->v=v;
 }
 
+void dump_prog(struct prog *p);
+
 void compile_envelope(struct envelope *e) {
 	int i;
 	struct prog *cp=e->prog;
 	uint32_t p=0;
 	for(i=0;i<e->ticklen;i++) {
 		struct tick *t=&e->tick[i];
-		if(e==&action[1].env[0]) printf("wait %u %u %u\n",i,t->pos,p);
 		compile_prog(cp++,PROG_WAIT,t->pos-p,0);
 		compile_prog(cp++,PROG_TICK,i,0);
 		p=t->pos;
 		switch(t->cmd) {
-		case CMD_END: compile_prog(cp++,PROG_HALT,0,0); return;
+		case CMD_END: compile_prog(cp++,PROG_HALT,0,0); goto exit;
 		case CMD_SET: compile_prog(cp++,PROG_SET,0,t->v); break;
 		case CMD_LOOP: compile_prog(cp++,PROG_LOOP,0,0); break;
 		}
 	}
 	compile_prog(cp++,PROG_HALT,0,0);
+exit:
+	dump_prog(e->prog);
 }
 
 const char *prog_names[]={"PROG_HALT", "PROG_SET", "PROG_WAIT", "PROG_LOOP", "PROG_TICK" };
 
 void dump_prog(struct prog *p) {
+	printf("dump prog\n");
 	int i;for(i=0;i<1024;i++) {
 		printf("op %s x %d v %f\n",prog_names[p->op],p->x,p->v);
 		if(p->op==PROG_HALT) break;
@@ -573,7 +577,9 @@ void button_envelope(int x,int y,int act) {
 			t->cmd=CMD_SET;
 			t->pos=960.0*(x-x0);
 			t->v=(y-y0)/100.0;
+			drag_tick=t;
 			sortticks(e);
+			compile_envelope(e);
 		}
 
 	} else {
@@ -667,12 +673,10 @@ int main(int argc,char *argv[])
 	action[1].env[0].tick[2].cmd=CMD_LOOP;
 	action[1].env[0].tick[2].pos=96000*2;
 
-	action[1].env[0].tick[3].cmd=CMD_END;
-	action[1].env[0].tick[3].pos=96000*3;
-	action[1].env[0].ticklen=4;
+	action[1].env[0].ticklen=3;
 
 	compile_envelope(&action[1].env[0]);
-	dump_prog(action[1].env[0].prog);
+	//dump_prog(action[1].env[0].prog);
 
 	audio_init();
 
