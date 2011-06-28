@@ -164,7 +164,7 @@ float envelope_val(struct envelope *e, uint32_t offset) {
 				return e->v;
 			}
 		case PROG_SET: e->ip++; e->v=p->v; break;
-		case PROG_LOOP: e->ip=0; break;
+		case PROG_LOOP: e->v=0; e->ip=0; break;
 		case PROG_HALT: return e->v;
 		case PROG_TICK: e->ct=p->x; e->ip++; break;
 		}
