@@ -15,13 +15,20 @@ typedef void (*action_func)(struct action *a,float *input,float *output,uint32_t
 struct envelope {
 	struct tick {
 		enum { CMD_END, CMD_SET, CMD_LOOP } cmd;
-		int pos; // in samples, negative for special stuff
+		int pos; // in samples
 		float v;
 	} tick[1024];
-	uint32_t idx;
-	int doffset;
-};
 
+	struct prog {
+		enum { PROG_HALT, PROG_SET, PROG_WAIT, PROG_LOOP, PROG_TICK } op;
+		int x;
+		float v;
+	} prog[1024];
+	uint32_t ip;
+	uint32_t t;
+	int ct;
+	float v;
+};
 struct action {
 	int x,y,def;
 
@@ -44,6 +51,44 @@ struct action {
 int action_len=0;
 
 struct action *pickup=0;
+
+// END -> HALT
+// SET -> SET,WAIT
+// LOOP -> LOOP
+
+void compile_prog(struct prog *p,int op,int x,float v) {
+	p->op=op;
+	p->x=x;
+	p->v=v;
+}
+
+void compile_envelope(struct envelope *e) {
+	int i;
+	struct prog *cp=e->prog;
+	uint32_t p=0;
+	for(i=0;i<1024;i++) {
+		struct tick *t=&e->tick[i];
+		if(e==&action[1].env[0]) printf("wait %u %u %u\n",i,t->pos,p);
+		compile_prog(cp++,PROG_WAIT,t->pos-p,0);
+		compile_prog(cp++,PROG_TICK,i,0);
+		p=t->pos;
+		switch(t->cmd) {
+		case CMD_END: compile_prog(cp++,PROG_HALT,0,0); return;
+		case CMD_SET: compile_prog(cp++,PROG_SET,0,t->v); break;
+		case CMD_LOOP: compile_prog(cp++,PROG_LOOP,0,0); break;
+		}
+	}
+}
+
+const char *prog_names[]={"PROG_HALT", "PROG_SET", "PROG_WAIT", "PROG_LOOP", "PROG_TICK" };
+
+void dump_prog(struct prog *p) {
+	int i;for(i=0;i<1024;i++) {
+		printf("op %s x %d v %f\n",prog_names[p->op],p->x,p->v);
+		if(p->op==PROG_HALT) break;
+		p++;
+	}
+}
 
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -97,12 +142,28 @@ const int deflen=sizeof(def)/sizeof(*def);
 //////////////////////////////////////////////////////////////////////////////////////////
 
 float envelope_val(struct envelope *e, uint32_t offset) {
-	while(e->tick[e->idx+1].pos < offset+e->doffset) {
-		if(e->tick[e->idx].cmd==CMD_END) return 0;
-		if(e->tick[e->idx].cmd==CMD_LOOP) { e->doffset+=-e->tick[e->idx].pos; e->idx=0; continue; }
-		e->idx++;
+	static int pip=-1;
+	for(;;) {
+		struct prog *p=&e->prog[e->ip];
+		if(p->op!=PROG_HALT && e->ip!=pip) {
+			printf("op %u %s x %d v %f\n",e->ip,prog_names[p->op],p->x,p->v);
+			pip=e->ip;
+		}
+		switch(p->op) {
+		case PROG_WAIT: {
+				//printf("e->t %u offset %u              \r",e->t,offset);
+				if(p->x==0) { e->ip++; break; }
+				if(e->t==0) { e->t=offset+p->x; printf("waiting for %u (%d)\n",p->x,e->t); return e->v; }
+				if(offset>=e->t) { e->t=0; e->ip++; break; }
+				return e->v;
+			}
+		case PROG_SET: e->ip++; e->v=p->v; break;
+		case PROG_LOOP: e->ip=0; break;
+		case PROG_HALT: return e->v;
+		case PROG_TICK: e->ct=p->x; e->ip++; break;
+		}
 	}
-	return e->tick[e->idx].v;
+	return e->v;
 }
 
 void calculate_envelopes(int b,uint32_t offset) {
@@ -333,8 +394,8 @@ void draw_envelope(struct envelope *e,int x,int y) {
 		case CMD_END: glColor3f(1,1,1);
 		}
 
-		if(i==e->idx) glColor3f(1,0,0);
 		if(drag_tick==&e->tick[i]) glColor3f(1,1,0);
+		if(i==e->ct) glColor3f(1,0,0);
 		glVertex2f(px-4,py-4);
 		glVertex2f(px+4,py-4);
 		glVertex2f(px+4,py+4);
@@ -562,6 +623,7 @@ int main(int argc,char *argv[])
 	action[2].x=300;
 	action[2].y=250;
 	action[2].scope_width=860;
+	action_len++;
 
 	action[1].env[0].tick[0].cmd=CMD_SET;
 	action[1].env[0].tick[0].pos=0;
@@ -573,7 +635,12 @@ int main(int argc,char *argv[])
 
 	action[1].env[0].tick[2].cmd=CMD_LOOP;
 	action[1].env[0].tick[2].pos=96000*2;
-	action_len++;
+
+	action[1].env[0].tick[3].cmd=CMD_END;
+	action[1].env[0].tick[3].pos=96000*3;
+
+	compile_envelope(&action[1].env[0]);
+	dump_prog(action[1].env[0].prog);
 
 	audio_init();
 
