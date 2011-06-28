@@ -114,6 +114,12 @@ void action_osc_sine(struct action *a, float input[4], float *output, uint32_t o
 	*output+=sin(seconds*freq*2*M_PI);
 }
 
+
+void action_osc_white(struct action *a, float input[4], float *output, uint32_t offset) {
+	if(!output) return;
+	*output+=2*(random()/(float)RAND_MAX)-1;
+}
+
 void action_osc_square(struct action *a, float input[4], float *output, uint32_t offset) {
 	if(!output) return;
 	float seconds=offset/96000.0;
@@ -139,6 +145,7 @@ struct def {
 		{action_lowpass},
 		{action_end},
 		{action_osc_sine},
+		{action_osc_white},
 	};
 
 const int deflen=sizeof(def)/sizeof(*def);
@@ -419,7 +426,7 @@ void draw_icon(int i,int x,int y, float a) {
 	glTranslatef(x,y,-2);
 	glRotatef(a,0,0,1);
 
-	float pz=(1/4.0);
+	float pz=(1/8.0);
 	float tz=i*pz;
 
 	glBindTexture(GL_TEXTURE_2D,icons);
@@ -712,7 +719,7 @@ int main(int argc,char *argv[])
 	glHint(GL_LINE_SMOOTH, GL_NICEST);
 
 
-	icons=load("icons.rgba",128,32);
+	icons=load("icons.rgba",256,32);
 	glGenTextures(1, &scope_id);
 
 	for(;!doexit;) {
