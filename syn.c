@@ -18,6 +18,7 @@ struct envelope {
 		int pos; // in samples
 		float v;
 	} tick[1024];
+	int ticklen;
 
 	struct prog {
 		enum { PROG_HALT, PROG_SET, PROG_WAIT, PROG_LOOP, PROG_TICK } op;
@@ -66,7 +67,7 @@ void compile_envelope(struct envelope *e) {
 	int i;
 	struct prog *cp=e->prog;
 	uint32_t p=0;
-	for(i=0;i<1024;i++) {
+	for(i=0;i<e->ticklen;i++) {
 		struct tick *t=&e->tick[i];
 		if(e==&action[1].env[0]) printf("wait %u %u %u\n",i,t->pos,p);
 		compile_prog(cp++,PROG_WAIT,t->pos-p,0);
@@ -78,6 +79,7 @@ void compile_envelope(struct envelope *e) {
 		case CMD_LOOP: compile_prog(cp++,PROG_LOOP,0,0); break;
 		}
 	}
+	compile_prog(cp++,PROG_HALT,0,0);
 }
 
 const char *prog_names[]={"PROG_HALT", "PROG_SET", "PROG_WAIT", "PROG_LOOP", "PROG_TICK" };
@@ -531,13 +533,32 @@ void relink(struct action *p) {
 	}
 }
 
+void sortticks(struct envelope *e) {
+	struct tick *t=e->tick;
+
+	int i;
+   	for(i=1;i<e->ticklen;) {
+		if(t[i-1].pos <= t[i].pos) { ++i;
+		} else {
+			struct tick tmp=t[i];
+			t[i]=t[i-1];
+			t[i-1]=tmp;
+			if(drag_tick==&t[i]) { drag_tick=&t[i-1]; }
+			else if(drag_tick==&t[i-1]) { drag_tick=&t[i]; }
+
+			--i;
+			if(i==0) i=1;
+		}
+	}
+}
+
 void button_envelope(int x,int y,int act) {
-	// draw_envelope(show_envelope,100,500);
 	const int x0=100,y0=500;
 	if(act==GLFW_PRESS) {
 		int i;
 		struct envelope *e=show_envelope;
-		for(i=0;i<1024;i++) {
+		drag_tick=0;
+		for(i=0;i<e->ticklen;i++) {
 			if(e->tick[i].cmd==CMD_END) break;
 			float px=x0+e->tick[i].pos/960.0,py=y0+e->tick[i].v*100;
 			float dx=px-x,dy=py-y;
@@ -546,7 +567,15 @@ void button_envelope(int x,int y,int act) {
 				break;
 			}
 		}
-		
+
+		if(drag_tick==0) { // new tick
+			struct tick *t=&e->tick[e->ticklen++];
+			t->cmd=CMD_SET;
+			t->pos=960.0*(x-x0);
+			t->v=(y-y0)/100.0;
+			sortticks(e);
+		}
+
 	} else {
 		drag_tick=0;
 	}
@@ -590,6 +619,7 @@ void GLFWCALL mouse(int x,int y) {
 		if(pos<0) { pos=0; }
 		drag_tick->v=v;
 		drag_tick->pos=pos;
+		sortticks(&action[1].env[0]);
 		compile_envelope(&action[1].env[0]);
 	}
 }
@@ -639,6 +669,7 @@ int main(int argc,char *argv[])
 
 	action[1].env[0].tick[3].cmd=CMD_END;
 	action[1].env[0].tick[3].pos=96000*3;
+	action[1].env[0].ticklen=4;
 
 	compile_envelope(&action[1].env[0]);
 	dump_prog(action[1].env[0].prog);
